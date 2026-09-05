@@ -1,6 +1,7 @@
 import os
 
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
@@ -95,6 +96,20 @@ Base.metadata.create_all(
 app = FastAPI(
     title="TravelBuddy API",
     version="1.0.0"
+)
+
+# ============================================================
+# CORS
+# ============================================================
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
