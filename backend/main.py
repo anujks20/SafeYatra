@@ -1183,3 +1183,40 @@ def police_active_sos(
     return {
         "active_sos": result
     }
+
+
+# ============================================================
+# RESOLVE SOS
+# ============================================================
+
+@app.put("/police/sos/{sos_id}/resolve")
+def resolve_sos(
+    sos_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Mark an active SOS alert as resolved.
+    """
+
+    sos = (
+        db.query(SOSAlert)
+        .filter(SOSAlert.id == sos_id)
+        .first()
+    )
+
+    if not sos:
+        raise HTTPException(
+            status_code=404,
+            detail="SOS alert not found"
+        )
+
+    sos.status = "resolved"
+
+    db.commit()
+    db.refresh(sos)
+
+    return {
+        "message": "Emergency resolved successfully",
+        "sos_id": sos.id,
+        "status": sos.status
+    }
