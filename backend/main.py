@@ -47,11 +47,14 @@ TWILIO_PHONE_NUMBER = os.getenv(
 # FIREBASE ADMIN INITIALIZATION
 # ============================================================
 
-FIREBASE_KEY_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "firebase",
-    "serviceAccountKey.json"
-)
+FIREBASE_KEY_PATH = "/etc/secrets/serviceAccountKey.json"
+
+if not os.path.exists(FIREBASE_KEY_PATH):
+    FIREBASE_KEY_PATH = os.path.join(
+        os.path.dirname(__file__),
+        "firebase",
+        "serviceAccountKey.json"
+    )
 
 try:
 
