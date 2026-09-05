@@ -944,7 +944,7 @@ def create_sos_alert(
 
                     # This channel contains
                     # your custom SOS siren.
-                    channel_id="sos_alerts_v3"
+                    channel_id="sos_alerts_v4"
                 )
             )
         )
