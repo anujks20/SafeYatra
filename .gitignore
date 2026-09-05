@@ -43,3 +43,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Generated Android build reports
+/android/build/reports/
+
+# Backend secrets
+/backend/.env
+/backend/firebase/*.json
+
+# Backend virtual environment
+/backend/venv/
+
+/backend/__pycache__/

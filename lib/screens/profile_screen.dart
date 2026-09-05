@@ -1,298 +1,633 @@
-// lib/screens/profile_screen.dart
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
+
 import '../services/api_service.dart';
 
 class ProfileScreen extends StatefulWidget {
+  final int userId;
   final String email;
-  const ProfileScreen({super.key, required this.email});
+
+  const ProfileScreen({
+    super.key,
+    required this.userId,
+    required this.email,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late Future<Map<String, dynamic>> _future;
+  bool _isLoading = true;
+  bool _isEditing = false;
+  bool _isSaving = false;
+
+  final TextEditingController _fullNameController =
+      TextEditingController();
+
+  final TextEditingController _emailController =
+      TextEditingController();
+
+  final TextEditingController _phoneController =
+      TextEditingController();
+
+  final TextEditingController _genderController =
+      TextEditingController();
+
+  final TextEditingController _ageController =
+      TextEditingController();
+
+  final TextEditingController _emergencyNameController =
+      TextEditingController();
+
+  final TextEditingController _emergencyPhoneController =
+      TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+
+    _emailController.text = widget.email;
+
+    _loadProfile();
   }
 
-  Future<Map<String, dynamic>> _load() async {
-    final res = await ApiService.getProfileByEmail(widget.email);
-    if (res['success'] == true) {
-      final data = (res['data'] as Map<String, dynamic>);
-      return data;
-    } else {
-      throw Exception(res['message'] ?? 'Failed to load profile');
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _genderController.dispose();
+    _ageController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyPhoneController.dispose();
+
+    super.dispose();
+  }
+
+  // ============================================================
+  // LOAD PROFILE
+  // ============================================================
+
+  Future<void> _loadProfile() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result =
+          await ApiService.getProfile(widget.userId);
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        final data = result['data'];
+
+        if (data != null) {
+          _fullNameController.text =
+              data['full_name']?.toString() ?? '';
+
+          _emailController.text =
+              data['email']?.toString() ?? widget.email;
+
+          _phoneController.text =
+              data['phone']?.toString() ?? '';
+
+          _genderController.text =
+              data['gender']?.toString() ?? '';
+
+          _ageController.text =
+              data['age']?.toString() ?? '';
+
+          _emergencyNameController.text =
+              data['emergency_contact_name']?.toString() ?? '';
+
+          _emergencyPhoneController.text =
+              data['emergency_contact_phone']?.toString() ?? '';
+        }
+      } else {
+        _showError(
+          result['message'] ??
+              'Failed to load profile',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Error loading profile: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  Future<void> _refresh() async {
+  // ============================================================
+  // SAVE PROFILE
+  // ============================================================
+
+  Future<void> _saveProfile() async {
+    final age =
+        int.tryParse(_ageController.text.trim());
+
     setState(() {
-      _future = _load();
+      _isSaving = true;
     });
-    await _future.catchError((_) {});
+
+    try {
+      final result =
+          await ApiService.updateProfile(
+        widget.userId,
+        _phoneController.text.trim(),
+        _genderController.text.trim(),
+        age,
+        _emergencyNameController.text.trim(),
+        _emergencyPhoneController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        setState(() {
+          _isEditing = false;
+        });
+
+        _showSuccess(
+          'Profile updated successfully',
+        );
+      } else {
+        _showError(
+          result['message'] ??
+              'Failed to update profile',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Error updating profile: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
-  // Function to share profile information
-  void _shareProfile(Map<String, dynamic> data) {
-    final name = (data['name'] ?? data['full_name'] ?? '').toString();
-    final email = (data['email'] ?? widget.email).toString();
-    final profileId = (data['id'] ?? '').toString();
+  // ============================================================
+  // SNACKBARS
+  // ============================================================
 
-    final shareText = '''
-My Profile Information:
-Name: $name
-Email: $email
-Profile ID: $profileId
-Emergency Contact: ${data['emergency_contact'] ?? 'Not set'}
-''';
-
-    Share.share(shareText, subject: 'My Profile Information');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: FutureBuilder<Map<String, dynamic>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return _ErrorView(
-              message: snapshot.error.toString(),
-              onRetry: _refresh,
-            );
-          }
-
-          final data = snapshot.data!;
-          final name = (data['name'] ?? data['full_name'] ?? '').toString();
-          final email = (data['email'] ?? widget.email).toString();
-          final gender = (data['gender'] ?? '').toString();
-          final age = data['age']?.toString() ?? '';
-          final mobile = (data['mobile_number'] ?? '').toString();
-          final aadhar = (data['aadhar_number'] ?? '').toString();
-          final passport = (data['passport'] ?? '').toString();
-          final emergency = (data['emergency_contact'] ?? '').toString();
-          final conditions = (data['medical_conditions'] ?? '').toString();
-          final allergies = (data['allergies'] ?? '').toString();
-          final profileId = (data['id'] ?? '').toString();
-
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
-              children: [
-                // Header card with share button
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: cs.outlineVariant),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: cs.primary.withOpacity(0.12),
-                        child: Icon(Icons.person_rounded, color: cs.primary, size: 28),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              name.isNotEmpty ? name : email,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              email,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                            if (profileId.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                'ID: $profileId',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: cs.onSurfaceVariant,
-                                  fontFamily: 'Monospace',
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.share_rounded, color: cs.primary),
-                        onPressed: () => _shareProfile(data),
-                        tooltip: 'Share profile',
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Info grid
-                _InfoTile(icon: Icons.person_outline, label: 'Gender', value: gender),
-                _InfoTile(icon: Icons.cake_outlined, label: 'Age', value: age),
-                _InfoTile(icon: Icons.call_outlined, label: 'Mobile', value: mobile),
-                _InfoTile(icon: Icons.badge_outlined, label: 'Aadhaar', value: aadhar),
-                _InfoTile(icon: Icons.travel_explore_outlined, label: 'Passport', value: passport),
-                _InfoTile(icon: Icons.sos_outlined, label: 'Emergency', value: emergency),
-
-                if (conditions.isNotEmpty) _InfoNote(label: 'Medical conditions', value: conditions),
-                if (allergies.isNotEmpty) _InfoNote(label: 'Allergies', value: allergies),
-
-                const SizedBox(height: 12),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: _refresh,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Refresh'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _shareProfile(data),
-                        icon: const Icon(Icons.share_rounded),
-                        label: const Text('Share'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
-}
 
-// Helper widget for info tiles
-class _InfoTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  const _InfoTile({required this.icon, required this.label, required this.value});
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Row(
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
         children: [
-          Icon(icon, color: cs.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
-          ),
-          Text(
-            value.isNotEmpty ? value : '—',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: value.isNotEmpty ? cs.onSurface : cs.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
+          _buildHeader(),
+
+          const SizedBox(height: 24),
+
+          _buildPersonalInformation(),
+
+          const SizedBox(height: 20),
+
+          _buildEmergencyContact(),
+
+          const SizedBox(height: 30),
+
+          _buildBottomButton(),
+
+          const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // PROFILE HEADER
+  // ============================================================
+
+  Widget _buildHeader() {
+    final displayName =
+        _fullNameController.text.isEmpty
+            ? 'TravelBuddy User'
+            : _fullNameController.text;
+
+    return Column(
+      children: [
+        Container(
+          width: 100,
+          height: 100,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.teal.withOpacity(0.2),
+            border: Border.all(
+              color: Colors.tealAccent,
+              width: 2,
             ),
+          ),
+          child: const Icon(
+            Icons.person,
+            size: 55,
+            color: Colors.tealAccent,
+          ),
+        ),
+
+        const SizedBox(height: 14),
+
+        Text(
+          displayName,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        const SizedBox(height: 5),
+
+        Text(
+          _emailController.text,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.65),
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // PERSONAL INFORMATION
+  // ============================================================
+
+  Widget _buildPersonalInformation() {
+    return _buildCard(
+      title: 'Personal Information',
+      icon: Icons.person_outline,
+      child: Column(
+        children: [
+          _buildTextField(
+            controller: _fullNameController,
+            label: 'Full Name',
+            icon: Icons.person_outline,
+            enabled: false,
+          ),
+
+          const SizedBox(height: 16),
+
+          _buildTextField(
+            controller: _emailController,
+            label: 'Email',
+            icon: Icons.email_outlined,
+            enabled: false,
+          ),
+
+          const SizedBox(height: 16),
+
+          _buildTextField(
+            controller: _phoneController,
+            label: 'Phone Number',
+            icon: Icons.phone_outlined,
+            keyboardType: TextInputType.phone,
+            enabled: _isEditing,
+          ),
+
+          const SizedBox(height: 16),
+
+          _buildTextField(
+            controller: _genderController,
+            label: 'Gender',
+            icon: Icons.person_outline,
+            enabled: _isEditing,
+          ),
+
+          const SizedBox(height: 16),
+
+          _buildTextField(
+            controller: _ageController,
+            label: 'Age',
+            icon: Icons.cake_outlined,
+            keyboardType: TextInputType.number,
+            enabled: _isEditing,
           ),
         ],
       ),
     );
   }
-}
 
-// Helper widget for info notes (multi-line content)
-class _InfoNote extends StatelessWidget {
-  final String label;
-  final String value;
-  const _InfoNote({required this.label, required this.value});
+  // ============================================================
+  // EMERGENCY CONTACT
+  // ============================================================
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+  Widget _buildEmergencyContact() {
+    return _buildCard(
+      title: 'Emergency Contact',
+      icon: Icons.contact_emergency_outlined,
+      child: Column(
+        children: [
+          _buildTextField(
+            controller: _emergencyNameController,
+            label: 'Emergency Contact Name',
+            icon: Icons.person_outline,
+            enabled: _isEditing,
+          ),
+
+          const SizedBox(height: 16),
+
+          _buildTextField(
+            controller: _emergencyPhoneController,
+            label: 'Emergency Contact Number',
+            icon: Icons.phone_in_talk_outlined,
+            keyboardType: TextInputType.phone,
+            enabled: _isEditing,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // CARD
+  // ============================================================
+
+  Widget _buildCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
+        color: const Color(0xFF1C2A3A)
+            .withOpacity(0.92),
+        borderRadius:
+            BorderRadius.circular(20),
+        border: Border.all(
+          color:
+              Colors.white.withOpacity(0.08),
+        ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              )),
-          const SizedBox(height: 6),
-          Text(value, style: Theme.of(context).textTheme.bodyMedium),
+          Row(
+            children: [
+              Icon(
+                icon,
+                color: Colors.tealAccent,
+              ),
+
+              const SizedBox(width: 10),
+
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight:
+                      FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          child,
         ],
       ),
     );
   }
-}
 
-// Error view widget
-class _ErrorView extends StatelessWidget {
-  final String message;
-  final Future<void> Function() onRetry;
-  const _ErrorView({required this.message, required this.onRetry});
+  // ============================================================
+  // TEXT FIELD
+  // ============================================================
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline_rounded, color: cs.error, size: 36),
-            const SizedBox(height: 8),
-            Text(
-              'Failed to load profile',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool enabled = true,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: keyboardType,
+      style: TextStyle(
+        color: enabled
+            ? Colors.white
+            : Colors.white.withOpacity(0.65),
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+          color:
+              Colors.white.withOpacity(0.6),
+        ),
+
+        prefixIcon: Icon(
+          icon,
+          color: enabled
+              ? Colors.tealAccent
+              : Colors.grey,
+        ),
+
+        filled: true,
+
+        fillColor: enabled
+            ? const Color(0xFF223346)
+            : Colors.black.withOpacity(0.12),
+
+        border: OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(12),
+        ),
+
+        enabledBorder:
+            OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color:
+                Colors.white.withOpacity(0.08),
+          ),
+        ),
+
+        disabledBorder:
+            OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color:
+                Colors.white.withOpacity(0.04),
+          ),
+        ),
+
+        focusedBorder:
+            OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: Colors.tealAccent,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // EDIT / SAVE BUTTON
+  // ============================================================
+
+  Widget _buildBottomButton() {
+    if (_isEditing) {
+      return Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _isSaving
+                  ? null
+                  : () {
+                      setState(() {
+                        _isEditing = false;
+                      });
+
+                      _loadProfile();
+                    },
+              style:
+                  OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(
+                  vertical: 16,
+                ),
+                foregroundColor:
+                    Colors.white,
+                side: BorderSide(
+                  color: Colors.white
+                      .withOpacity(0.3),
+                ),
+                shape:
+                    RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: ElevatedButton(
+              onPressed:
+                  _isSaving ? null : _saveProfile,
+              style:
+                  ElevatedButton.styleFrom(
+                backgroundColor:
+                    Colors.tealAccent,
+                foregroundColor:
+                    Colors.black,
+                padding:
+                    const EdgeInsets.symmetric(
+                  vertical: 16,
+                ),
+                shape:
+                    RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(12),
+                ),
+              ),
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child:
+                          CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
+                    )
+                  : const Text(
+                      'Save Changes',
+                      style: TextStyle(
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
             ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try again'),
-            ),
-          ],
+          ),
+        ],
+      );
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () {
+          setState(() {
+            _isEditing = true;
+          });
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor:
+              Colors.tealAccent,
+          foregroundColor:
+              Colors.black,
+          padding:
+              const EdgeInsets.symmetric(
+            vertical: 16,
+          ),
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(12),
+          ),
+        ),
+        icon: const Icon(Icons.edit),
+        label: const Text(
+          'Edit Profile',
+          style: TextStyle(
+            fontWeight:
+                FontWeight.bold,
+          ),
         ),
       ),
     );

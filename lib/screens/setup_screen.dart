@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../services/api_service.dart';
 import 'home_screen.dart';
 
 class SetupScreen extends StatefulWidget {
+  final int userId;
   final String email;
 
   const SetupScreen({
     super.key,
+    required this.userId,
     required this.email,
   });
 
@@ -18,26 +21,32 @@ class SetupScreen extends StatefulWidget {
 class _SetupScreenState extends State<SetupScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _genderController = TextEditingController();
-  final TextEditingController _ageController = TextEditingController();
-  final TextEditingController _mobileNumberController = TextEditingController();
-  final TextEditingController _aadharController = TextEditingController();
-  final TextEditingController _passportController = TextEditingController();
-  final TextEditingController _emergencyNumberController = TextEditingController();
-  final TextEditingController _medicalConditionsController = TextEditingController();
-  final TextEditingController _allergiesController = TextEditingController();
+
+  final TextEditingController _nameController =
+      TextEditingController();
+
+  final TextEditingController _genderController =
+      TextEditingController();
+
+  final TextEditingController _ageController =
+      TextEditingController();
+
+  final TextEditingController _mobileNumberController =
+      TextEditingController();
+
+  final TextEditingController _emergencyNameController =
+      TextEditingController();
+
+  final TextEditingController _emergencyNumberController =
+      TextEditingController();
 
   bool _isLoading = false;
   int _currentStep = 0;
-  bool _shareHealthData = false;
-  bool _shareLocationData = false;
 
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
-  // Teal accent used across AuthScreen
   Color get _accent => Colors.tealAccent.shade400;
 
   @override
@@ -49,10 +58,17 @@ class _SetupScreenState extends State<SetupScreen>
       duration: const Duration(milliseconds: 800),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeInOut),
+        curve: const Interval(
+          0.3,
+          1.0,
+          curve: Curves.easeInOut,
+        ),
       ),
     );
 
@@ -62,7 +78,11 @@ class _SetupScreenState extends State<SetupScreen>
     ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+        curve: const Interval(
+          0.3,
+          1.0,
+          curve: Curves.easeOut,
+        ),
       ),
     );
 
@@ -72,17 +92,155 @@ class _SetupScreenState extends State<SetupScreen>
   @override
   void dispose() {
     _controller.dispose();
+
     _nameController.dispose();
     _genderController.dispose();
     _ageController.dispose();
     _mobileNumberController.dispose();
-    _aadharController.dispose();
-    _passportController.dispose();
+    _emergencyNameController.dispose();
     _emergencyNumberController.dispose();
-    _medicalConditionsController.dispose();
-    _allergiesController.dispose();
+
     super.dispose();
   }
+
+  // ============================================================
+  // SUBMIT SETUP
+  // ============================================================
+
+  Future<void> _submitSetup() async {
+    final int? age =
+        int.tryParse(_ageController.text.trim());
+
+    if (age == null) {
+      _showError('Please enter a valid age');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result =
+          await ApiService.updateProfile(
+        widget.userId,
+        _mobileNumberController.text.trim(),
+        _genderController.text.trim(),
+        age,
+        _emergencyNameController.text.trim(),
+        _emergencyNumberController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(
+              userId: widget.userId,
+              email: widget.email,
+              name: _nameController.text.trim().isNotEmpty
+                  ? _nameController.text.trim()
+                  : widget.email,
+            ),
+          ),
+        );
+      } else {
+        _showError(
+          result['message'] ??
+              'Failed to complete profile setup',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Setup error: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // ============================================================
+  // CONTINUE
+  // ============================================================
+
+  void _continue() {
+    bool isValid = true;
+
+    switch (_currentStep) {
+      case 0:
+        if (_nameController.text.trim().isEmpty ||
+            _genderController.text.trim().isEmpty ||
+            _ageController.text.trim().isEmpty ||
+            int.tryParse(
+                  _ageController.text.trim(),
+                ) ==
+                null) {
+          isValid = false;
+        }
+        break;
+
+      case 1:
+        if (_mobileNumberController.text.trim().length !=
+                10 ||
+            _emergencyNameController.text
+                .trim()
+                .isEmpty ||
+            _emergencyNumberController.text
+                    .trim()
+                    .length !=
+                10) {
+          isValid = false;
+        }
+        break;
+    }
+
+    if (!isValid) {
+      _showError(
+        'Please fill all required fields correctly',
+      );
+      return;
+    }
+
+    if (_currentStep < 1) {
+      setState(() {
+        _currentStep++;
+      });
+    } else {
+      _submitSetup();
+    }
+  }
+
+  void _back() {
+    if (_currentStep > 0) {
+      setState(() {
+        _currentStep--;
+      });
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // UI
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -93,14 +251,16 @@ class _SetupScreenState extends State<SetupScreen>
         duration: const Duration(milliseconds: 500),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF0E1A24), Color(0xFF162534)],
+            colors: [
+              Color(0xFF0E1A24),
+              Color(0xFF162534),
+            ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
         ),
         child: Stack(
           children: [
-            // Soft background orbs
             Positioned(
               top: -size.width * 0.25,
               left: -size.width * 0.25,
@@ -109,385 +269,66 @@ class _SetupScreenState extends State<SetupScreen>
                 height: size.width * 0.7,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.04),
+                  color: Colors.teal.withOpacity(0.08),
                 ),
               ),
             ),
+
             Positioned(
-              bottom: -size.width * 0.35,
+              bottom: -size.width * 0.25,
               right: -size.width * 0.25,
               child: Container(
-                width: size.width * 0.85,
-                height: size.width * 0.85,
+                width: size.width * 0.7,
+                height: size.width * 0.7,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.04),
+                  color: Colors.teal.withOpacity(0.08),
                 ),
               ),
             ),
 
-            // Content
             SafeArea(
-              child: Column(
-                children: [
-                  // Header (fixed)
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    child: SlideTransition(
-                      position: _slideAnimation,
-                      child: FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.person_add_alt_1,
-                              size: 60,
-                              color: Colors.white.withOpacity(0.92),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Complete Your Profile',
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Help us personalize your experience',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.white.withOpacity(0.72),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 20),
 
-                  // Scrollable Stepper
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: SlideTransition(
-                        position: _slideAnimation,
-                        child: FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: Theme(
-                            data: ThemeData.dark().copyWith(
-                              colorScheme: ColorScheme.fromSeed(
-                                seedColor: _accent,
-                                brightness: Brightness.dark,
-                              ),
-                              scaffoldBackgroundColor: Colors.transparent,
-                              canvasColor: Colors.transparent,
-                              dividerColor: Colors.white.withOpacity(0.18),
-                              textTheme: Theme.of(context).textTheme.apply(
-                                bodyColor: Colors.white,
-                                displayColor: Colors.white,
-                              ),
+                          _buildHeader(),
+
+                          const SizedBox(height: 30),
+
+                          _buildProgressIndicator(),
+
+                          const SizedBox(height: 30),
+
+                          AnimatedSwitcher(
+                            duration: const Duration(
+                              milliseconds: 300,
                             ),
-                            child: Stepper(
-                              currentStep: _currentStep,
-                              onStepContinue: _continue,
-                              onStepCancel: _cancel,
-                              onStepTapped: (step) => setState(() => _currentStep = step),
-                              controlsBuilder: (context, details) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 20),
-                                  child: Row(
-                                    children: [
-                                      if (_currentStep > 0)
-                                        ElevatedButton(
-                                          onPressed: details.onStepCancel,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.white.withOpacity(0.08),
-                                            foregroundColor: Colors.white,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 24,
-                                              vertical: 14,
-                                            ),
-                                          ),
-                                          child: const Text('Back'),
-                                        ),
-                                      if (_currentStep > 0) const SizedBox(width: 12),
-                                      ElevatedButton(
-                                        onPressed: details.onStepContinue,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: _accent,
-                                          foregroundColor: Colors.black,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 24,
-                                            vertical: 14,
-                                          ),
-                                          elevation: 0,
-                                        ),
-                                        child: _isLoading
-                                            ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2.2,
-                                            color: Colors.black,
-                                          ),
-                                        )
-                                            : Text(_currentStep == 4 ? 'Complete' : 'Next'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                              steps: [
-                                Step(
-                                  title: const Text(
-                                    'Personal Info',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  content: Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1C2A3A).withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                                    ),
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      children: [
-                                        _buildTextField(
-                                          controller: _nameController,
-                                          label: 'Full Name',
-                                          icon: Icons.person_outline,
-                                          validator: (value) {
-                                            if (value == null || value.isEmpty) {
-                                              return 'Please enter your name';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                        const SizedBox(height: 16),
-                                        _buildDropdownField(
-                                          controller: _genderController,
-                                          label: 'Gender',
-                                          icon: Icons.transgender,
-                                          items: const ['Male', 'Female', 'Other'],
-                                          validator: (value) {
-                                            if (value == null || value.isEmpty) {
-                                              return 'Please select your gender';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                        const SizedBox(height: 16),
-                                        _buildTextField(
-                                          controller: _ageController,
-                                          label: 'Age',
-                                          icon: Icons.calendar_today_outlined,
-                                          keyboardType: TextInputType.number,
-                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                          validator: (value) {
-                                            if (value == null || value.isEmpty) {
-                                              return 'Please enter your age';
-                                            }
-                                            if (int.tryParse(value) == null) {
-                                              return 'Please enter a valid age';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Step(
-                                  title: const Text(
-                                    'Contact Info',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  content: Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1C2A3A).withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                                    ),
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      children: [
-                                        _buildTextField(
-                                          controller: _mobileNumberController,
-                                          label: 'Mobile Number',
-                                          icon: Icons.phone,
-                                          keyboardType: TextInputType.phone,
-                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                          validator: (value) {
-                                            if (value == null || value.isEmpty) {
-                                              return 'Please enter your mobile number';
-                                            }
-                                            if (value.length != 10) {
-                                              return 'Mobile number must be 10 digits';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                        const SizedBox(height: 16),
-                                        _buildTextField(
-                                          controller: _emergencyNumberController,
-                                          label: 'Emergency Contact',
-                                          icon: Icons.emergency_outlined,
-                                          keyboardType: TextInputType.phone,
-                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                          validator: (value) {
-                                            if (value == null || value.isEmpty) {
-                                              return 'Please enter emergency contact';
-                                            }
-                                            if (value.length != 10) {
-                                              return 'Emergency number must be 10 digits';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Step(
-                                  title: const Text(
-                                    'Identification',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  content: Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1C2A3A).withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                                    ),
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      children: [
-                                        _buildTextField(
-                                          controller: _aadharController,
-                                          label: 'Aadhar Number',
-                                          icon: Icons.credit_card_outlined,
-                                          keyboardType: TextInputType.number,
-                                          inputFormatters: [
-                                            FilteringTextInputFormatter.digitsOnly,
-                                            LengthLimitingTextInputFormatter(12),
-                                          ],
-                                          validator: (value) {
-                                            if (value == null || value.isEmpty) {
-                                              return 'Please enter your Aadhar number';
-                                            }
-                                            if (value.length != 12) {
-                                              return 'Aadhar must be 12 digits';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                        const SizedBox(height: 16),
-                                        _buildTextField(
-                                          controller: _passportController,
-                                          label: 'Passport Number (optional)',
-                                          icon: Icons.airplane_ticket_outlined,
-                                          validator: (value) {
-                                            // Optional
-                                            return null;
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Step(
-                                  title: const Text(
-                                    'Health Info',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  content: Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1C2A3A).withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                                    ),
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      children: [
-                                        _buildTextField(
-                                          controller: _medicalConditionsController,
-                                          label: 'Medical Conditions (optional)',
-                                          icon: Icons.medical_services_outlined,
-                                          maxLines: 2,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        _buildTextField(
-                                          controller: _allergiesController,
-                                          label: 'Allergies (optional)',
-                                          icon: Icons.warning_outlined,
-                                          maxLines: 2,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Step(
-                                  title: const Text(
-                                    'Privacy Settings',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  content: Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1C2A3A).withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                                    ),
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      children: [
-                                        _buildCheckbox(
-                                          value: _shareHealthData,
-                                          onChanged: (value) => setState(() => _shareHealthData = value!),
-                                          label: 'Share health data in emergencies',
-                                          description: 'Allow emergency services to access your medical information when needed',
-                                        ),
-                                        const SizedBox(height: 16),
-                                        _buildCheckbox(
-                                          value: _shareLocationData,
-                                          onChanged: (value) => setState(() => _shareLocationData = value!),
-                                          label: 'Share location for safety features',
-                                          description: 'Enable location sharing for crash detection and emergency services',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                            child: _currentStep == 0
+                                ? _buildPersonalInfo()
+                                : _buildContactInfo(),
                           ),
-                        ),
+
+                          const SizedBox(height: 30),
+
+                          _buildButtons(),
+
+                          const SizedBox(height: 20),
+                        ],
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ],
@@ -496,260 +337,557 @@ class _SetupScreenState extends State<SetupScreen>
     );
   }
 
-  Widget _buildCheckbox({
-    required bool value,
-    required ValueChanged<bool?> onChanged,
-    required String label,
-    String? description,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF223346),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Transform.scale(
-            scale: 1.2,
-            child: Checkbox(
-              value: value,
-              onChanged: onChanged,
-              checkColor: Colors.black,
-              fillColor: MaterialStateProperty.resolveWith<Color>(
-                    (Set<MaterialState> states) {
-                  if (states.contains(MaterialState.selected)) {
-                    return _accent;
-                  }
-                  return Colors.grey[600]!;
-                },
+  // ============================================================
+  // HEADER
+  // ============================================================
+
+  Widget _buildHeader() {
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 55,
+              height: 55,
+              decoration: BoxDecoration(
+                color: Colors.teal.withOpacity(0.15),
+                borderRadius:
+                    BorderRadius.circular(16),
+                border: Border.all(
+                  color:
+                      Colors.teal.withOpacity(0.4),
+                ),
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
+              child: Icon(
+                Icons.person_add_alt_1,
+                color: _accent,
+                size: 28,
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 15,
-                  ),
-                ),
-                if (description != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
+
+            const SizedBox(width: 16),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Complete Your Profile',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 13,
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    'Help us keep your journey safer',
+                    style: TextStyle(
+                      color: Colors.white
+                          .withOpacity(0.65),
+                      fontSize: 14,
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
+          ],
+        ),
+
+        const SizedBox(height: 12),
+
+        Text(
+          widget.email,
+          style: TextStyle(
+            color:
+                Colors.tealAccent.shade100,
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // PROGRESS
+  // ============================================================
+
+  Widget _buildProgressIndicator() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            _buildStepDot(0),
+            Expanded(
+              child: Container(
+                height: 2,
+                color: _currentStep >= 1
+                    ? _accent
+                    : Colors.white24,
+              ),
+            ),
+            _buildStepDot(1),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        Row(
+          mainAxisAlignment:
+              MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Personal Info',
+              style: TextStyle(
+                color: _currentStep == 0
+                    ? Colors.white
+                    : Colors.white54,
+                fontSize: 12,
+              ),
+            ),
+            Text(
+              'Emergency Contact',
+              style: TextStyle(
+                color: _currentStep == 1
+                    ? Colors.white
+                    : Colors.white54,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepDot(int step) {
+    final bool active =
+        step <= _currentStep;
+
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: active
+            ? _accent
+            : const Color(0xFF223346),
+      ),
+      child: Center(
+        child: active && step < _currentStep
+            ? const Icon(
+                Icons.check,
+                color: Colors.black,
+                size: 18,
+              )
+            : Text(
+                '${step + 1}',
+                style: TextStyle(
+                  color: active
+                      ? Colors.black
+                      : Colors.white,
+                  fontWeight:
+                      FontWeight.bold,
+                ),
+              ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // STEP 1
+  // ============================================================
+
+  Widget _buildPersonalInfo() {
+    return Container(
+      key: const ValueKey('personal'),
+      padding: const EdgeInsets.all(20),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Personal Information',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            'Tell us a little about yourself',
+            style: TextStyle(
+              color:
+                  Colors.white.withOpacity(0.6),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          _buildTextField(
+            controller: _nameController,
+            label: 'Full Name',
+            icon: Icons.person_outline,
+          ),
+
+          const SizedBox(height: 18),
+
+          _buildDropdownField(
+            controller: _genderController,
+            label: 'Gender',
+            icon: Icons.person_outline,
+            items: const [
+              'Male',
+              'Female',
+              'Other',
+              'Prefer not to say',
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          _buildTextField(
+            controller: _ageController,
+            label: 'Age',
+            icon: Icons.cake_outlined,
+            keyboardType:
+                TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter
+                  .digitsOnly,
+            ],
           ),
         ],
       ),
     );
   }
 
-  // Dark-styled inputs
+  // ============================================================
+  // STEP 2
+  // ============================================================
+
+  Widget _buildContactInfo() {
+    return Container(
+      key: const ValueKey('contact'),
+      padding: const EdgeInsets.all(20),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Contact & Emergency Details',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            'These details can help during emergencies',
+            style: TextStyle(
+              color:
+                  Colors.white.withOpacity(0.6),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          _buildTextField(
+            controller: _mobileNumberController,
+            label: 'Mobile Number',
+            icon: Icons.phone_outlined,
+            keyboardType:
+                TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter
+                  .digitsOnly,
+              LengthLimitingTextInputFormatter(
+                10,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          _buildTextField(
+            controller: _emergencyNameController,
+            label: 'Emergency Contact Name',
+            icon: Icons.contact_emergency_outlined,
+          ),
+
+          const SizedBox(height: 18),
+
+          _buildTextField(
+            controller:
+                _emergencyNumberController,
+            label: 'Emergency Contact Number',
+            icon: Icons.phone_in_talk_outlined,
+            keyboardType:
+                TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter
+                  .digitsOnly,
+              LengthLimitingTextInputFormatter(
+                10,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // BUTTONS
+  // ============================================================
+
+  Widget _buildButtons() {
+    return Row(
+      children: [
+        if (_currentStep > 0) ...[
+          Expanded(
+            child: OutlinedButton(
+              onPressed:
+                  _isLoading ? null : _back,
+              style: OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(
+                  vertical: 16,
+                ),
+                side: BorderSide(
+                  color:
+                      Colors.white.withOpacity(0.3),
+                ),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Back'),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+        ],
+
+        Expanded(
+          child: ElevatedButton(
+            onPressed:
+                _isLoading ? null : _continue,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accent,
+              foregroundColor: Colors.black,
+              padding:
+                  const EdgeInsets.symmetric(
+                vertical: 16,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(12),
+              ),
+            ),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child:
+                        CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.black,
+                    ),
+                  )
+                : Text(
+                    _currentStep == 1
+                        ? 'Complete Setup'
+                        : 'Continue',
+                    style: const TextStyle(
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // DECORATION
+  // ============================================================
+
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: const Color(0xFF1C2A3A)
+          .withOpacity(0.9),
+      borderRadius:
+          BorderRadius.circular(20),
+      border: Border.all(
+        color:
+            Colors.white.withOpacity(0.08),
+      ),
+    );
+  }
+
+  // ============================================================
+  // TEXT FIELD
+  // ============================================================
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
     TextInputType? keyboardType,
-    String? Function(String?)? validator,
-    int maxLines = 1,
-    List<TextInputFormatter>? inputFormatters,
+    List<TextInputFormatter>?
+        inputFormatters,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
-      validator: validator,
-      maxLines: maxLines,
       inputFormatters: inputFormatters,
-      style: const TextStyle(color: Colors.white, fontSize: 15.5),
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 15.5,
+      ),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.72)),
-        prefixIcon: Icon(icon, color: Colors.tealAccent.withOpacity(0.8)),
+        labelStyle: TextStyle(
+          color:
+              Colors.white.withOpacity(0.72),
+        ),
+        prefixIcon: Icon(
+          icon,
+          color:
+              Colors.tealAccent.withOpacity(0.8),
+        ),
         filled: true,
-        fillColor: const Color(0xFF223346),
+        fillColor: const Color(
+          0xFF223346,
+        ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius:
+              BorderRadius.circular(12),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+        enabledBorder:
+            OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color:
+                Colors.white.withOpacity(0.08),
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.22)),
+        focusedBorder:
+            OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color:
+                Colors.white.withOpacity(0.22),
+          ),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding:
+            const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
     );
   }
+
+  // ============================================================
+  // DROPDOWN
+  // ============================================================
 
   Widget _buildDropdownField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
     required List<String> items,
-    String? Function(String?)? validator,
   }) {
     return DropdownButtonFormField<String>(
-      value: controller.text.isEmpty ? null : controller.text,
-      dropdownColor: const Color(0xFF223346),
-      style: const TextStyle(color: Colors.white),
+      value: controller.text.isEmpty
+          ? null
+          : controller.text,
+      dropdownColor:
+          const Color(0xFF223346),
+      style: const TextStyle(
+        color: Colors.white,
+      ),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.72)),
-        prefixIcon: Icon(icon, color: Colors.tealAccent.withOpacity(0.8)),
+        labelStyle: TextStyle(
+          color:
+              Colors.white.withOpacity(0.72),
+        ),
+        prefixIcon: Icon(
+          icon,
+          color:
+              Colors.tealAccent.withOpacity(0.8),
+        ),
         filled: true,
-        fillColor: const Color(0xFF223346),
+        fillColor:
+            const Color(0xFF223346),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius:
+              BorderRadius.circular(12),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+        enabledBorder:
+            OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color:
+                Colors.white.withOpacity(0.08),
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.22)),
+        focusedBorder:
+            OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color:
+                Colors.white.withOpacity(0.22),
+          ),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       ),
       items: items
           .map(
-            (value) => DropdownMenuItem<String>(
-          value: value,
-          child: Text(value, style: const TextStyle(color: Colors.white)),
-        ),
-      )
+            (value) =>
+                DropdownMenuItem<String>(
+              value: value,
+              child: Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          )
           .toList(),
       onChanged: (value) {
-        controller.text = value ?? '';
+        setState(() {
+          controller.text = value ?? '';
+        });
       },
-      validator: validator,
-      icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+      icon: const Icon(
+        Icons.arrow_drop_down,
+        color: Colors.white,
+      ),
     );
-  }
-
-  void _continue() {
-    if (_currentStep < 4) {
-      bool isValid = true;
-      switch (_currentStep) {
-        case 0:
-          if (_nameController.text.isEmpty ||
-              _genderController.text.isEmpty ||
-              _ageController.text.isEmpty ||
-              int.tryParse(_ageController.text) == null) {
-            isValid = false;
-          }
-          break;
-        case 1:
-          if (_mobileNumberController.text.isEmpty ||
-              _mobileNumberController.text.length != 10 ||
-              _emergencyNumberController.text.isEmpty ||
-              _emergencyNumberController.text.length != 10) {
-            isValid = false;
-          }
-          break;
-        case 2:
-          if (_aadharController.text.isEmpty ||
-              _aadharController.text.length != 12) {
-            isValid = false;
-          }
-          break;
-        case 3:
-        // Health info step - all fields are optional, so always valid
-          isValid = true;
-          break;
-      }
-
-      if (isValid) {
-        setState(() => _currentStep += 1);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Please fill all required fields correctly'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      }
-    } else {
-      _submitSetup();
-    }
-  }
-
-  void _cancel() {
-    if (_currentStep > 0) {
-      setState(() => _currentStep -= 1);
-    }
-  }
-
-  void _submitSetup() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    final result = await ApiService.setupUser(
-      widget.email,
-      _nameController.text,
-      _genderController.text,
-      int.parse(_ageController.text),
-      _mobileNumberController.text,
-      _aadharController.text,
-      _passportController.text,
-      _emergencyNumberController.text,
-      _medicalConditionsController.text,
-      _allergiesController.text,
-      shareHealth: _shareHealthData,
-      shareLocation: _shareLocationData,
-    );
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (result['success'] == true) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(
-            email: widget.email,
-            name: _nameController.text.isNotEmpty
-                ? _nameController.text
-                : widget.email,
-          ),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message']),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-    }
   }
 }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "880694138298",
+    "project_id": "travelbuddy-sih-2026-anuj",
+    "storage_bucket": "travelbuddy-sih-2026-anuj.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:880694138298:android:9b63c5a875fa95641bf983",
+        "android_client_info": {
+          "package_name": "com.example.safe_yatra"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_TfPPAufzpeY1ev4r4tZElURv9Sz_ZC0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

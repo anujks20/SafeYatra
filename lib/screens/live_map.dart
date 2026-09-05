@@ -306,10 +306,10 @@ class _LiveMapState extends State<LiveMap> with WidgetsBindingObserver {
                 options: MapOptions(center: _currentPosition, zoom: 15),
                 children: [
                   TileLayer(
-                    urlTemplate:
-                    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    subdomains: const ['a', 'b', 'c'],
-                  ),
+  urlTemplate:
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  userAgentPackageName: 'com.example.safe_yatra',
+),
 
                   // Draw geofence circles
                   CircleLayer(
@@ -416,7 +416,10 @@ class _LiveMapState extends State<LiveMap> with WidgetsBindingObserver {
               heroTag: 'share_whatsapp',
               onPressed: _shareLocationWhatsApp,
               backgroundColor: Colors.white,
-              child: Icon(FontAwesomeIcons.whatsapp, color: Colors.green),
+              child: FaIcon(
+  FontAwesomeIcons.whatsapp,
+  color: Colors.green,
+),
               tooltip: 'Share via WhatsApp',
             ),
           ),
