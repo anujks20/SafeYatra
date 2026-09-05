@@ -1010,3 +1010,161 @@ def create_sos_alert(
         "fcm_error":
             fcm_error
     }
+
+
+
+
+
+# ============================================================
+# POLICE DASHBOARD ENDPOINTS
+# ============================================================
+
+@app.get("/police/user")
+def police_find_user(
+    email: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Find a TravelBuddy user by email for the police dashboard.
+    """
+
+    user = (
+        db.query(User)
+        .filter(User.email == email)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return {
+        "user_id": user.id,
+        "full_name": user.full_name,
+        "email": user.email,
+        "phone": user.phone,
+
+        "latitude": user.latitude,
+        "longitude": user.longitude,
+
+        "emergency_contact_name":
+            user.emergency_contact_name,
+
+        "emergency_contact_phone":
+            user.emergency_contact_phone
+    }
+
+
+@app.get("/police/user/{user_id}/status")
+def police_user_status(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get current user location and latest SOS status.
+    """
+
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    latest_sos = (
+        db.query(SOSAlert)
+        .filter(SOSAlert.user_id == user_id)
+        .order_by(SOSAlert.id.desc())
+        .first()
+    )
+
+    sos_data = None
+
+    if latest_sos:
+        sos_data = {
+            "id": latest_sos.id,
+            "latitude": latest_sos.latitude,
+            "longitude": latest_sos.longitude,
+            "status": latest_sos.status,
+            "created_at": latest_sos.created_at
+        }
+
+    return {
+        "user_id": user.id,
+        "full_name": user.full_name,
+
+        "latitude": user.latitude,
+        "longitude": user.longitude,
+
+        "emergency_contact_name":
+            user.emergency_contact_name,
+
+        "emergency_contact_phone":
+            user.emergency_contact_phone,
+
+        "sos": sos_data
+    }
+
+
+@app.get("/police/sos/active")
+def police_active_sos(
+    db: Session = Depends(get_db)
+):
+    """
+    Get all currently active SOS alerts.
+    """
+
+    alerts = (
+        db.query(SOSAlert)
+        .filter(SOSAlert.status == "active")
+        .order_by(SOSAlert.id.desc())
+        .all()
+    )
+
+    result = []
+
+    for alert in alerts:
+
+        user = (
+            db.query(User)
+            .filter(User.id == alert.user_id)
+            .first()
+        )
+
+        if not user:
+            continue
+
+        result.append({
+            "sos_id": alert.id,
+
+            "user_id": user.id,
+
+            "user_name": user.full_name,
+
+            "email": user.email,
+
+            "phone": user.phone,
+
+            "latitude": alert.latitude,
+
+            "longitude": alert.longitude,
+
+            "created_at": alert.created_at,
+
+            "emergency_contact_name":
+                user.emergency_contact_name,
+
+            "emergency_contact_phone":
+                user.emergency_contact_phone
+        })
+
+    return {
+        "active_sos": result
+    }
